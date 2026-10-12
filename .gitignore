@@ -9,3 +9,7 @@ __pycache__/
 build/
 dist/
 .build-*/
+
+# Environnement de compilation macOS
+.venv/
+.DS_Store

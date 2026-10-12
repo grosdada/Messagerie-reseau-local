@@ -26,3 +26,9 @@ aucun compte, aucun service cloud ni partage SMB ne sont nécessaires.
 
 Le nom affiché est le nom Windows du PC. Pour le choisir explicitement, lancez
 `python lan_messenger.py --name "Studio"` dans ce dossier.
+
+## macOS
+
+[Télécharger l’app pour Mac Apple Silicon](releases/MessagerieLocale-macOS-arm64.zip).
+
+Voir [le guide macOS](README-macOS.md) pour l’application autonome, les autorisations réseau et la compilation. Le protocole Windows reste identique.
