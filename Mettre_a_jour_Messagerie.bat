@@ -17,6 +17,7 @@ if not exist "%APP%" (
 echo.
 echo Fermeture de la messagerie puis telechargement de la derniere version...
 taskkill /f /im "%APP%" >nul 2>&1
+timeout /t 4 /nobreak >nul
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $out='%NEW%'; Remove-Item -LiteralPath $out -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -Uri '%URL%' -OutFile $out; if ((Get-Item -LiteralPath $out).Length -lt 1000000) { throw 'Le fichier telecharge est invalide.' }; Move-Item -LiteralPath $out -Destination '%~dp0%APP%' -Force"
 if errorlevel 1 (
