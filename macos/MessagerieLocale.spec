@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_submodules
 from pathlib import Path
 root = Path(SPECPATH).parent
-a = Analysis([str(root / 'lan_messenger.py')], pathex=[str(root)], hiddenimports=collect_submodules('webview'), excludes=['tkinter'])
+a = Analysis([str(root / 'macos' / 'lan_messenger_mac.py')], pathex=[str(root)], hiddenimports=collect_submodules('webview'), excludes=['tkinter'])
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MessagerieLocale', console=False)
 coll = COLLECT(exe, a.binaries, a.datas, name='MessagerieLocale')

@@ -48,6 +48,8 @@ Les données sont séparées du paquet .app et survivent à sa mise à jour.
 
 ## Compatibilité et portée réseau
 
+Le lanceur Mac est `macos/lan_messenger_mac.py` ; `lan_messenger.py` et l’exécutable Windows conservent les mises à jour Windows du dépôt. Le Mac garde les échanges texte/images historiques (6 Mo), sans les fonctions Windows de MAJ Internet, démarrage automatique et documents génériques.
+
 Le protocole Windows est conservé : broadcast UDP `255.255.255.255:37020`,
 annonce JSON avec `type=qbuilder-lan-messenger`, `id`, `name`, `port` ;
 POST HTTP `/api/receive` sur TCP 8766 avec `id`, `sender`, `text`, `created_at`,
@@ -93,5 +95,5 @@ remplacent pas une validation physique Mac/PC (pare-feu, Wi-Fi, broadcast).
 - Compilation ARM64 réussie et signature ad hoc vérifiée avec `codesign --verify --deep --strict`.
 - Application lancée : `/api/state` répond sur 127.0.0.1:8766.
 - Quatre postes réels découverts par UDP ; leurs `/api/receive` rejettent correctement un message vide avec HTTP 400, sans historique ajouté.
-- Tests HTTP texte Unicode et images dans les deux sens avec la source Windows originale : 3 tests réussis.
+- Tests HTTP texte Unicode et images dans les deux sens avec la source Windows originale : 4 tests réussis (Windows initial et Windows 1.2.4).
 - Contrôle visuel WebKit et dépôt de fichier manuel non effectués : autorisation de contrôle de l’interface indisponible. À vérifier sur le Mac avec la procédure ci-dessus.

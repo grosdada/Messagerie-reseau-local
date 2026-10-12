@@ -9,7 +9,7 @@ import threading
 import unittest
 from unittest.mock import patch, MagicMock
 from urllib.request import Request, urlopen
-import lan_messenger as mac
+from macos import lan_messenger_mac as mac
 
 spec = importlib.util.spec_from_file_location('windows', Path(__file__).parent / 'fixtures/windows_reference.py')
 win = importlib.util.module_from_spec(spec)
@@ -45,6 +45,17 @@ class ProtocolTests(unittest.TestCase):
                 for server, _, _ in servers:
                     server.shutdown()
                     server.server_close()
+
+    def test_current_windows_http(self):
+        global win
+        original = win
+        spec = importlib.util.spec_from_file_location('current_windows', Path(__file__).parent / 'fixtures/windows_current.py')
+        win = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(win)
+        try:
+            self.test_http_both_directions()
+        finally:
+            win = original
 
     def test_discovery_wire_format(self):
         for module in (mac, win):

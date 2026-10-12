@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 # Dans l'executable, les donnees doivent rester a cote du .exe et non dans le
 # dossier temporaire ou PyInstaller decompresse le programme a chaque lancement.
 ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-DATA_DIR = (Path.home() / "Library" / "Application Support" / "MessagerieLocale") if sys.platform == "darwin" else ROOT / "lan_messenger_data"
+DATA_DIR = ROOT / "lan_messenger_data"
 MEDIA_DIR = DATA_DIR / "media"
 HISTORY_FILE = DATA_DIR / "history.json"
 HTTP_PORT = 8766
@@ -94,7 +94,7 @@ class Messenger:
         self.instance_id = str(uuid.uuid4())
         self.peers = {}
         self.lock = threading.Lock()
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(exist_ok=True)
         MEDIA_DIR.mkdir(exist_ok=True)
         self.history = self._load_history()
 
@@ -366,32 +366,13 @@ def main():
     parser.add_argument("--port", type=int, default=HTTP_PORT, help="Port local du service")
     parser.add_argument("--no-browser", action="store_true", help="N'ouvre pas le navigateur automatiquement")
     args = parser.parse_args()
-    # Bind before discovery/browser startup: an occupied port must not create a second peer.
-    try:
-        server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
-    except OSError:
-        if sys.platform == "darwin":
-            webbrowser.open(f"http://127.0.0.1:{args.port}")
-            return
-        raise
     messenger = Messenger(args.name, args.port); Handler.messenger = messenger
     threading.Thread(target=messenger.discovery_loop, daemon=True).start()
     print(f"Messagerie locale: http://127.0.0.1:{args.port} (nom: {args.name})")
     print(f"Reseau autorise: {NETWORK}; decouverte UDP {DISCOVERY_PORT}; messages TCP {args.port}")
-    if sys.platform == "darwin" and getattr(sys, "frozen", False) and not args.no_browser:
-        import webview
-        threading.Thread(target=server.serve_forever, daemon=True).start()
-        try:
-            webview.create_window("Messagerie locale", f"http://127.0.0.1:{args.port}",
-                                  width=760, height=640, min_size=(440, 400))
-            webview.start()
-        finally:
-            server.shutdown()
-            server.server_close()
-        return
     if not args.no_browser:
         threading.Timer(0.7, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}")).start()
-    server.serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
