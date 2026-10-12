@@ -35,7 +35,7 @@ NETWORK = ipaddress.ip_network("192.168.1.0/24")
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MAX_FILE_BYTES = 20 * 1024 * 1024
 MAX_REQUEST_BYTES = 30 * 1024 * 1024
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 RAW_BASE_URL = "https://raw.githubusercontent.com/grosdada/Messagerie-reseau-local/main"
 
 
@@ -53,6 +53,38 @@ def local_name():
     known_names = {"DESKTOP-SGPQEIF": "ford"}
     hostname = socket.gethostname().upper()
     return known_names.get(hostname, hostname[:48] or "PC")
+
+
+def startup_enabled():
+    """Indique si l'application est lancee a l'ouverture de session Windows."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r"Software\Microsoft\Windows\CurrentVersion\Run") as key:
+            winreg.QueryValueEx(key, "MessagerieLocale")
+        return True
+    except (ImportError, OSError):
+        return False
+
+
+def set_startup(enabled):
+    try:
+        import winreg
+    except ImportError:
+        raise ValueError("Cette option est disponible sous Windows uniquement")
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                        r"Software\Microsoft\Windows\CurrentVersion\Run", 0,
+                        winreg.KEY_SET_VALUE) as key:
+        if enabled:
+            if not getattr(sys, "frozen", False):
+                raise ValueError("Utilise l'executable MessagerieLocale.exe")
+            winreg.SetValueEx(key, "MessagerieLocale", 0, winreg.REG_SZ,
+                              f'"{Path(sys.executable).resolve()}"')
+        else:
+            try:
+                winreg.DeleteValue(key, "MessagerieLocale")
+            except FileNotFoundError:
+                pass
 
 
 class Messenger:
@@ -203,11 +235,11 @@ def schedule_update():
 PAGE = r'''<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Messagerie locale</title><style>
 :root{color-scheme:dark;--bg:#11151c;--panel:#1d2430;--line:#364153;--text:#edf2f7;--muted:#9eabbc;--accent:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#10151c,#172235);color:var(--text);font:15px system-ui,sans-serif}.app{max-width:900px;height:100vh;margin:auto;padding:20px;display:grid;grid-template-rows:auto 1fr auto;gap:14px}header,.composer{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px}.online{color:var(--accent)}#messages{overflow:auto;padding:8px 2px;display:flex;flex-direction:column;gap:10px}.message{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;max-width:82%}.mine{align-self:flex-end;border-color:#438b73}.meta{font-size:12px;color:var(--muted);margin-bottom:5px}.message p{white-space:pre-wrap;margin:0}.message img{display:block;max-width:100%;max-height:340px;margin-top:9px;border-radius:8px}.attachment{display:inline-block;margin-top:9px;color:var(--accent)}.composer{display:grid;grid-template-columns:1fr auto;gap:10px}.composer.dragover{border-color:var(--accent);box-shadow:0 0 0 3px #6ee7b733}textarea{min-height:62px;resize:vertical;background:#121923;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}button,#attach{background:var(--accent);color:#09251c;border:0;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center}#update{background:transparent;border:1px solid var(--accent);color:var(--accent);height:34px}#image{display:none}#attach{grid-column:1/2;height:34px;width:max-content;font-size:13px}#notice{font-size:12px;color:var(--muted);grid-column:1/-1}.empty{color:var(--muted);text-align:center;margin-top:40px}@media(max-width:600px){.app{padding:10px}.message{max-width:94%}.composer{grid-template-columns:1fr}.composer button{height:42px}#attach{grid-column:auto}}
-</style><body><main class="app"><header><div><h1>Messagerie locale</h1><div class="sub"><span id="identity"></span> · <span class="online" id="peers">Recherche des PC…</span></div></div><button type="button" id="update">MAJ</button></header><section id="messages"></section><form class="composer" id="form"><textarea id="text" maxlength="4000" placeholder="Écrire à tous les PC connectés… Dépose aussi un fichier ici."></textarea><button>Envoyer à tous</button><label id="attach" for="image">📎 Joindre un fichier</label><input id="image" type="file"><div id="notice">Texte et fichiers restent sur le réseau local. Pièces jointes limitées à 20 Mo.</div></form></main><script>
+</style><body><main class="app"><header><div><h1>Messagerie locale</h1><div class="sub"><span id="identity"></span> · <span class="online" id="peers">Recherche des PC…</span></div></div><div style="display:flex;gap:8px"><button type="button" id="startup">Démarrer avec Windows</button><button type="button" id="update">MAJ</button></div></header><section id="messages"></section><form class="composer" id="form"><textarea id="text" maxlength="4000" placeholder="Écrire à tous les PC connectés… Dépose aussi un fichier ici."></textarea><button>Envoyer à tous</button><label id="attach" for="image">📎 Joindre un fichier</label><input id="image" type="file"><div id="notice">Texte et fichiers restent sur le réseau local. Pièces jointes limitées à 20 Mo.</div></form></main><script>
 const messages=document.querySelector('#messages'),notice=document.querySelector('#notice');let first=true;
 function esc(v){const n=document.createElement('span');n.textContent=v;return n.innerHTML}function render(items){messages.innerHTML=items.length?'': '<div class="empty">Aucun message pour le moment.</div>';for(const m of items){const a=m.attachment,legacy=m.image?{stored_name:m.image,name:'Image partagée',type:'image/*'}:null,file=a||legacy,preview=file&&file.type.startsWith('image/');const el=document.createElement('article');el.className='message '+(m.mine?'mine':'');el.innerHTML=`<div class="meta">${esc(m.sender)} · ${new Date(m.created_at).toLocaleString()}</div>${m.text?`<p>${esc(m.text)}</p>`:''}${file?(preview?`<img alt="${esc(file.name)}" src="/media/${encodeURIComponent(file.stored_name)}">`:`<a class="attachment" download="${esc(file.name)}" href="/media/${encodeURIComponent(file.stored_name)}">📎 ${esc(file.name)}</a>`):''}`;messages.append(el)}if(first||messages.scrollHeight-messages.scrollTop-messages.clientHeight<100)messages.scrollTop=messages.scrollHeight;first=false}
-async function refresh(){try{const r=await fetch('/api/state'),d=await r.json();document.querySelector('#identity').textContent=d.name;document.querySelector('#peers').textContent=d.peers.length?`${d.peers.length} PC connecté${d.peers.length>1?'s':''} : ${d.peers.map(p=>p.name).join(', ')}`:'Aucun autre PC détecté';render(d.history)}catch(e){notice.textContent='Connexion au service local impossible.'}}
-const form=document.querySelector('#form'),textBox=document.querySelector('#text'),imageInput=document.querySelector('#image');let droppedFile=null,dragDepth=0;function chooseFile(file){if(!file)return;if(file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}droppedFile=file;notice.textContent=`Fichier prêt à envoyer : ${file.name}`;}form.addEventListener('dragenter',e=>{if(e.dataTransfer.files.length){e.preventDefault();dragDepth++;form.classList.add('dragover')}});form.addEventListener('dragover',e=>{if(e.dataTransfer.files.length)e.preventDefault()});form.addEventListener('dragleave',e=>{dragDepth--;if(dragDepth<=0){dragDepth=0;form.classList.remove('dragover')}});form.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;form.classList.remove('dragover');chooseFile(e.dataTransfer.files[0])});imageInput.addEventListener('change',()=>{droppedFile=null;chooseFile(imageInput.files[0])});form.addEventListener('submit',async e=>{e.preventDefault();const text=textBox.value.trim(),file=droppedFile||imageInput.files[0];if(!text&&!file)return;if(file&&file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}let attachment=null;if(file){attachment={name:file.name,type:file.type||'application/octet-stream',data:await new Promise((ok,no)=>{const r=new FileReader;r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(file)})}}notice.textContent='Envoi en cours…';try{const r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,attachment})}),d=await r.json();if(!r.ok)throw Error(d.error);textBox.value='';imageInput.value='';droppedFile=null;notice.textContent=d.delivered.length?`Envoyé à ${d.delivered.join(', ')}.${d.failed.length?' Échec : '+d.failed.join(', '):''}`:'Message enregistré ici ; aucun autre PC détecté.';await refresh()}catch(e){notice.textContent=e.message}});document.querySelector('#update').addEventListener('click',async()=>{notice.textContent='Vérification de la mise à jour…';try{const r=await fetch('/api/update-check'),d=await r.json();if(!r.ok)throw Error(d.error);if(!d.available){notice.textContent='Application déjà à jour.';return}if(!confirm(`Version ${d.version} disponible. Installer maintenant ?`))return;notice.textContent='Téléchargement de la mise à jour…';const u=await fetch('/api/update',{method:'POST'}),result=await u.json();if(!u.ok)throw Error(result.error);notice.textContent='Mise à jour installée : relancement…'}catch(e){notice.textContent=e.message}});refresh();setInterval(refresh,3000);
+async function refresh(){try{const r=await fetch('/api/state'),d=await r.json();document.querySelector('#identity').textContent=d.name;document.querySelector('#peers').textContent=d.peers.length?`${d.peers.length} PC connecté${d.peers.length>1?'s':''} : ${d.peers.map(p=>p.name).join(', ')}`:'Aucun autre PC détecté';document.querySelector('#startup').textContent=d.startup?'Démarrage Windows : oui':'Démarrer avec Windows';render(d.history)}catch(e){notice.textContent='Connexion au service local impossible.'}}
+const form=document.querySelector('#form'),textBox=document.querySelector('#text'),imageInput=document.querySelector('#image');let droppedFile=null,dragDepth=0;function chooseFile(file){if(!file)return;if(file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}droppedFile=file;notice.textContent=`Fichier prêt à envoyer : ${file.name}`;}form.addEventListener('dragenter',e=>{if(e.dataTransfer.files.length){e.preventDefault();dragDepth++;form.classList.add('dragover')}});form.addEventListener('dragover',e=>{if(e.dataTransfer.files.length)e.preventDefault()});form.addEventListener('dragleave',e=>{dragDepth--;if(dragDepth<=0){dragDepth=0;form.classList.remove('dragover')}});form.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;form.classList.remove('dragover');chooseFile(e.dataTransfer.files[0])});imageInput.addEventListener('change',()=>{droppedFile=null;chooseFile(imageInput.files[0])});form.addEventListener('submit',async e=>{e.preventDefault();const text=textBox.value.trim(),file=droppedFile||imageInput.files[0];if(!text&&!file)return;if(file&&file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}let attachment=null;if(file){attachment={name:file.name,type:file.type||'application/octet-stream',data:await new Promise((ok,no)=>{const r=new FileReader;r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(file)})}}notice.textContent='Envoi en cours…';try{const r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,attachment})}),d=await r.json();if(!r.ok)throw Error(d.error);textBox.value='';imageInput.value='';droppedFile=null;notice.textContent=d.delivered.length?`Envoyé à ${d.delivered.join(', ')}.${d.failed.length?' Échec : '+d.failed.join(', '):''}`:'Message enregistré ici ; aucun autre PC détecté.';await refresh()}catch(e){notice.textContent=e.message}});document.querySelector('#startup').addEventListener('click',async()=>{try{const state=await (await fetch('/api/state')).json(),enabled=!state.startup,r=await fetch('/api/startup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled})}),d=await r.json();if(!r.ok)throw Error(d.error);notice.textContent=enabled?'La messagerie démarrera avec Windows.':'Démarrage automatique désactivé.';await refresh()}catch(e){notice.textContent=e.message}});document.querySelector('#update').addEventListener('click',async()=>{notice.textContent='Vérification de la mise à jour…';try{const r=await fetch('/api/update-check'),d=await r.json();if(!r.ok)throw Error(d.error);if(!d.available){notice.textContent='Application déjà à jour.';return}if(!confirm(`Version ${d.version} disponible. Installer maintenant ?`))return;notice.textContent='Téléchargement de la mise à jour…';const u=await fetch('/api/update',{method:'POST'}),result=await u.json();if(!u.ok)throw Error(result.error);notice.textContent='Mise à jour installée : relancement…'}catch(e){notice.textContent=e.message}});refresh();setInterval(refresh,3000);
 </script></body></html>'''
 
 
@@ -252,7 +284,8 @@ class Handler(BaseHTTPRequestHandler):
             body = PAGE.encode("utf-8"); self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path == "/api/state":
-            self.json({"name": self.messenger.name, "peers": self.messenger.active_peers(), "history": self.messenger.history}); return
+            self.json({"name": self.messenger.name, "peers": self.messenger.active_peers(),
+                       "history": self.messenger.history, "startup": startup_enabled()}); return
         if path == "/api/update-check":
             try:
                 version = latest_version()
@@ -277,6 +310,14 @@ class Handler(BaseHTTPRequestHandler):
                 threading.Timer(0.5, lambda: os._exit(0)).start()
             except ValueError as exc:
                 self.json({"error": str(exc)}, 502)
+            return
+        if path == "/api/startup":
+            if not self.local_only(): self.json({"error": "Acces refuse"}, 403); return
+            try:
+                set_startup(bool(self.read_body().get("enabled")))
+                self.json({"ok": True, "startup": startup_enabled()})
+            except ValueError as exc:
+                self.json({"error": str(exc)}, 400)
             return
         if path != "/api/send" or not self.local_only(): self.json({"error": "Acces refuse"}, 403); return
         try:
