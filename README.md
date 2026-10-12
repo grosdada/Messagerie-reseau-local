@@ -13,6 +13,19 @@ Les PC se détectent automatiquement ; le bandeau indique ceux qui sont
 actuellement joignables. Un envoi part vers tous ces PC. Aucune installation,
 aucun compte, aucun service cloud ni partage SMB ne sont nécessaires.
 
+## Mise à jour sans réinstallation
+
+Deux options : le bouton **MAJ** de l'application vérifie puis installe la
+dernière version. Ou envoie `Mettre_a_jour_Messagerie.bat` aux autres PC via le
+chat, puis demande au destinataire de déposer ce fichier dans le même dossier
+que `MessagerieLocale.exe` et de double-cliquer dessus. Le script ferme
+l'ancienne application, télécharge la version publiée sur GitHub, la remplace
+et la relance automatiquement.
+
+La zone de texte accepte aussi le glisser-déposer de fichiers, y compris les
+fichiers HTML. Les images s'affichent dans la conversation ; les autres fichiers
+sont proposés au téléchargement. La limite est de 20 Mo par pièce jointe.
+
 ## Réseau et sécurité
 
 - L'interface est réservée au navigateur du PC local (`127.0.0.1`).
