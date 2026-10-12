@@ -10,7 +10,9 @@ import base64
 import ipaddress
 import json
 import mimetypes
+import os
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -31,6 +33,10 @@ HTTP_PORT = 8766
 DISCOVERY_PORT = 37020
 NETWORK = ipaddress.ip_network("192.168.1.0/24")
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
+MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_REQUEST_BYTES = 30 * 1024 * 1024
+APP_VERSION = "1.2.0"
+RAW_BASE_URL = "https://raw.githubusercontent.com/grosdada/Messagerie-reseau-local/main"
 
 
 def is_allowed(address):
@@ -156,14 +162,52 @@ class Messenger:
         return delivered, failed
 
 
+def latest_version():
+    try:
+        with urlopen(f"{RAW_BASE_URL}/VERSION.json", timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        version = str(payload.get("version") or "")
+        if not version:
+            raise ValueError("version absente")
+        return version
+    except Exception as exc:
+        raise ValueError(f"Verification impossible : {exc}")
+
+
+def schedule_update():
+    """Telecharge le binaire puis le remplace apres l'arret de l'application."""
+    if not getattr(sys, "frozen", False):
+        raise ValueError("La mise a jour automatique est disponible dans l'executable uniquement")
+    target = Path(sys.executable).resolve()
+    temporary = target.with_suffix(".new.exe")
+    try:
+        with urlopen(f"{RAW_BASE_URL}/MessagerieLocale.exe", timeout=60) as response:
+            binary = response.read()
+        if len(binary) < 1_000_000 or not binary.startswith(b"MZ"):
+            raise ValueError("fichier de mise a jour invalide")
+        temporary.write_bytes(binary)
+    except Exception as exc:
+        temporary.unlink(missing_ok=True)
+        raise ValueError(f"Telechargement impossible : {exc}")
+    script = target.with_name("update_messagerie.cmd")
+    script.write_text(
+        "@echo off\r\n"
+        "ping 127.0.0.1 -n 3 > nul\r\n"
+        f'move /y "{temporary}" "{target}" > nul\r\n'
+        f'start "" "{target}"\r\n'
+        'del "%~f0"\r\n', encoding="utf-8")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.Popen(["cmd.exe", "/c", str(script)], creationflags=flags)
+
+
 PAGE = r'''<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Messagerie locale</title><style>
-:root{color-scheme:dark;--bg:#11151c;--panel:#1d2430;--line:#364153;--text:#edf2f7;--muted:#9eabbc;--accent:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#10151c,#172235);color:var(--text);font:15px system-ui,sans-serif}.app{max-width:900px;height:100vh;margin:auto;padding:20px;display:grid;grid-template-rows:auto 1fr auto;gap:14px}header,.composer{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px}h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px}.online{color:var(--accent)}#messages{overflow:auto;padding:8px 2px;display:flex;flex-direction:column;gap:10px}.message{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;max-width:82%}.mine{align-self:flex-end;border-color:#438b73}.meta{font-size:12px;color:var(--muted);margin-bottom:5px}.message p{white-space:pre-wrap;margin:0}.message img{display:block;max-width:100%;max-height:340px;margin-top:9px;border-radius:8px}.composer{display:grid;grid-template-columns:1fr auto;gap:10px}textarea{min-height:62px;resize:vertical;background:#121923;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}textarea.dragover{border-color:var(--accent);box-shadow:0 0 0 3px #6ee7b733}button{background:var(--accent);color:#09251c;border:0;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer}#image{grid-column:1/2;color:var(--muted)}#notice{font-size:12px;color:var(--muted);grid-column:1/-1}.empty{color:var(--muted);text-align:center;margin-top:40px}@media(max-width:600px){.app{padding:10px}.message{max-width:94%}.composer{grid-template-columns:1fr}.composer button{height:42px}#image{grid-column:auto}}
-</style><body><main class="app"><header><h1>Messagerie locale</h1><div class="sub"><span id="identity"></span> · <span class="online" id="peers">Recherche des PC…</span></div></header><section id="messages"></section><form class="composer" id="form"><textarea id="text" maxlength="4000" placeholder="Écrire à tous les PC connectés…"></textarea><button>Envoyer à tous</button><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><div id="notice">Les messages et images restent sur le réseau local. Images limitées à 6 Mo.</div></form></main><script>
+:root{color-scheme:dark;--bg:#11151c;--panel:#1d2430;--line:#364153;--text:#edf2f7;--muted:#9eabbc;--accent:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#10151c,#172235);color:var(--text);font:15px system-ui,sans-serif}.app{max-width:900px;height:100vh;margin:auto;padding:20px;display:grid;grid-template-rows:auto 1fr auto;gap:14px}header,.composer{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px}.online{color:var(--accent)}#messages{overflow:auto;padding:8px 2px;display:flex;flex-direction:column;gap:10px}.message{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;max-width:82%}.mine{align-self:flex-end;border-color:#438b73}.meta{font-size:12px;color:var(--muted);margin-bottom:5px}.message p{white-space:pre-wrap;margin:0}.message img{display:block;max-width:100%;max-height:340px;margin-top:9px;border-radius:8px}.attachment{display:inline-block;margin-top:9px;color:var(--accent)}.composer{display:grid;grid-template-columns:1fr auto;gap:10px}textarea{min-height:62px;resize:vertical;background:#121923;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}textarea.dragover{border-color:var(--accent);box-shadow:0 0 0 3px #6ee7b733}button{background:var(--accent);color:#09251c;border:0;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer}#update{background:transparent;border:1px solid var(--accent);color:var(--accent);height:34px}#image{grid-column:1/2;color:var(--muted)}#notice{font-size:12px;color:var(--muted);grid-column:1/-1}.empty{color:var(--muted);text-align:center;margin-top:40px}@media(max-width:600px){.app{padding:10px}.message{max-width:94%}.composer{grid-template-columns:1fr}.composer button{height:42px}#image{grid-column:auto}}
+</style><body><main class="app"><header><div><h1>Messagerie locale</h1><div class="sub"><span id="identity"></span> · <span class="online" id="peers">Recherche des PC…</span></div></div><button type="button" id="update">MAJ</button></header><section id="messages"></section><form class="composer" id="form"><textarea id="text" maxlength="4000" placeholder="Écrire à tous les PC connectés… Dépose aussi un fichier ici."></textarea><button>Envoyer à tous</button><input id="image" type="file"><div id="notice">Texte et fichiers restent sur le réseau local. Pièces jointes limitées à 20 Mo.</div></form></main><script>
 const messages=document.querySelector('#messages'),notice=document.querySelector('#notice');let first=true;
-function esc(v){const n=document.createElement('span');n.textContent=v;return n.innerHTML}function render(items){messages.innerHTML=items.length?'': '<div class="empty">Aucun message pour le moment.</div>';for(const m of items){const el=document.createElement('article');el.className='message '+(m.mine?'mine':'');el.innerHTML=`<div class="meta">${esc(m.sender)} · ${new Date(m.created_at).toLocaleString()}</div>${m.text?`<p>${esc(m.text)}</p>`:''}${m.image?`<img alt="Image partagée" src="/media/${encodeURIComponent(m.image)}">`:''}`;messages.append(el)}if(first||messages.scrollHeight-messages.scrollTop-messages.clientHeight<100)messages.scrollTop=messages.scrollHeight;first=false}
+function esc(v){const n=document.createElement('span');n.textContent=v;return n.innerHTML}function render(items){messages.innerHTML=items.length?'': '<div class="empty">Aucun message pour le moment.</div>';for(const m of items){const a=m.attachment,legacy=m.image?{stored_name:m.image,name:'Image partagée',type:'image/*'}:null,file=a||legacy,preview=file&&file.type.startsWith('image/');const el=document.createElement('article');el.className='message '+(m.mine?'mine':'');el.innerHTML=`<div class="meta">${esc(m.sender)} · ${new Date(m.created_at).toLocaleString()}</div>${m.text?`<p>${esc(m.text)}</p>`:''}${file?(preview?`<img alt="${esc(file.name)}" src="/media/${encodeURIComponent(file.stored_name)}">`:`<a class="attachment" download="${esc(file.name)}" href="/media/${encodeURIComponent(file.stored_name)}">📎 ${esc(file.name)}</a>`):''}`;messages.append(el)}if(first||messages.scrollHeight-messages.scrollTop-messages.clientHeight<100)messages.scrollTop=messages.scrollHeight;first=false}
 async function refresh(){try{const r=await fetch('/api/state'),d=await r.json();document.querySelector('#identity').textContent=d.name;document.querySelector('#peers').textContent=d.peers.length?`${d.peers.length} PC connecté${d.peers.length>1?'s':''} : ${d.peers.map(p=>p.name).join(', ')}`:'Aucun autre PC détecté';render(d.history)}catch(e){notice.textContent='Connexion au service local impossible.'}}
-const form=document.querySelector('#form'),textBox=document.querySelector('#text'),imageInput=document.querySelector('#image');let droppedFile=null;function chooseDroppedImage(file){if(!file||!file.type.startsWith('image/')){notice.textContent='Dépose une image PNG, JPEG, WebP ou GIF.';return}if(file.size>6*1024*1024){notice.textContent='Image trop lourde (maximum 6 Mo).';return}droppedFile=file;notice.textContent=`Image prête à envoyer : ${file.name}`;}['dragenter','dragover'].forEach(type=>textBox.addEventListener(type,e=>{e.preventDefault();textBox.classList.add('dragover')}));['dragleave','drop'].forEach(type=>textBox.addEventListener(type,e=>{e.preventDefault();textBox.classList.remove('dragover')}));textBox.addEventListener('drop',e=>chooseDroppedImage(e.dataTransfer.files[0]));imageInput.addEventListener('change',()=>{droppedFile=null;if(imageInput.files[0])notice.textContent=`Image prête à envoyer : ${imageInput.files[0].name}`});form.addEventListener('submit',async e=>{e.preventDefault();const text=textBox.value.trim(),file=droppedFile||imageInput.files[0];if(!text&&!file)return;if(file&&file.size>6*1024*1024){notice.textContent='Image trop lourde (maximum 6 Mo).';return}let image=null;if(file){image={name:file.name,type:file.type,data:await new Promise((ok,no)=>{const r=new FileReader;r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(file)})}}notice.textContent='Envoi en cours…';try{const r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,image})}),d=await r.json();if(!r.ok)throw Error(d.error);textBox.value='';imageInput.value='';droppedFile=null;notice.textContent=d.delivered.length?`Envoyé à ${d.delivered.join(', ')}.${d.failed.length?' Échec : '+d.failed.join(', '):''}`:'Message enregistré ici ; aucun autre PC détecté.';await refresh()}catch(e){notice.textContent=e.message}});refresh();setInterval(refresh,3000);
+const form=document.querySelector('#form'),textBox=document.querySelector('#text'),imageInput=document.querySelector('#image');let droppedFile=null;function chooseFile(file){if(!file)return;if(file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}droppedFile=file;notice.textContent=`Fichier prêt à envoyer : ${file.name}`;}['dragenter','dragover'].forEach(type=>textBox.addEventListener(type,e=>{e.preventDefault();textBox.classList.add('dragover')}));['dragleave','drop'].forEach(type=>textBox.addEventListener(type,e=>{e.preventDefault();textBox.classList.remove('dragover')}));textBox.addEventListener('drop',e=>chooseFile(e.dataTransfer.files[0]));imageInput.addEventListener('change',()=>{droppedFile=null;chooseFile(imageInput.files[0])});form.addEventListener('submit',async e=>{e.preventDefault();const text=textBox.value.trim(),file=droppedFile||imageInput.files[0];if(!text&&!file)return;if(file&&file.size>20*1024*1024){notice.textContent='Fichier trop lourd (maximum 20 Mo).';return}let attachment=null;if(file){attachment={name:file.name,type:file.type||'application/octet-stream',data:await new Promise((ok,no)=>{const r=new FileReader;r.onload=()=>ok(r.result.split(',')[1]);r.onerror=no;r.readAsDataURL(file)})}}notice.textContent='Envoi en cours…';try{const r=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,attachment})}),d=await r.json();if(!r.ok)throw Error(d.error);textBox.value='';imageInput.value='';droppedFile=null;notice.textContent=d.delivered.length?`Envoyé à ${d.delivered.join(', ')}.${d.failed.length?' Échec : '+d.failed.join(', '):''}`:'Message enregistré ici ; aucun autre PC détecté.';await refresh()}catch(e){notice.textContent=e.message}});document.querySelector('#update').addEventListener('click',async()=>{notice.textContent='Vérification de la mise à jour…';try{const r=await fetch('/api/update-check'),d=await r.json();if(!r.ok)throw Error(d.error);if(!d.available){notice.textContent='Application déjà à jour.';return}if(!confirm(`Version ${d.version} disponible. Installer maintenant ?`))return;notice.textContent='Téléchargement de la mise à jour…';const u=await fetch('/api/update',{method:'POST'}),result=await u.json();if(!u.ok)throw Error(result.error);notice.textContent='Mise à jour installée : relancement…'}catch(e){notice.textContent=e.message}});refresh();setInterval(refresh,3000);
 </script></body></html>'''
 
 
@@ -184,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def read_body(self):
         length = int(self.headers.get("Content-Length", "0"))
-        if length <= 0 or length > MAX_IMAGE_BYTES * 2:
+        if length <= 0 or length > MAX_REQUEST_BYTES:
             raise ValueError("Taille de requête invalide")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
@@ -197,7 +241,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(403, "Source refusee"); return
             name = Path(unquote(path[7:])).name; file = MEDIA_DIR / name
             if not file.is_file(): self.send_error(404); return
-            body = file.read_bytes(); self.send_response(200); self.send_header("Content-Type", mimetypes.guess_type(file)[0] or "application/octet-stream")
+            content_type = mimetypes.guess_type(file)[0] or "application/octet-stream"
+            body = file.read_bytes(); self.send_response(200); self.send_header("Content-Type", content_type)
+            if not content_type.startswith("image/"):
+                self.send_header("Content-Disposition", "attachment")
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if not self.local_only():
             self.send_error(403, "Interface reservee au poste local"); return
@@ -206,6 +253,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if path == "/api/state":
             self.json({"name": self.messenger.name, "peers": self.messenger.active_peers(), "history": self.messenger.history}); return
+        if path == "/api/update-check":
+            try:
+                version = latest_version()
+                self.json({"version": version, "current": APP_VERSION, "available": version != APP_VERSION})
+            except ValueError as exc:
+                self.json({"error": str(exc)}, 502)
+            return
         self.send_error(404)
 
     def do_POST(self):
@@ -215,36 +269,53 @@ class Handler(BaseHTTPRequestHandler):
             try: message = build_message(self.read_body(), incoming=True)
             except ValueError as exc: self.json({"error": str(exc)}, 400); return
             self.messenger.add_message(message); self.json({"ok": True}); return
+        if path == "/api/update":
+            if not self.local_only(): self.json({"error": "Acces refuse"}, 403); return
+            try:
+                schedule_update()
+                self.json({"ok": True})
+                threading.Timer(0.5, lambda: os._exit(0)).start()
+            except ValueError as exc:
+                self.json({"error": str(exc)}, 502)
+            return
         if path != "/api/send" or not self.local_only(): self.json({"error": "Acces refuse"}, 403); return
         try:
             outbound = self.read_body()
             message = build_message(outbound, sender=self.messenger.name, mine=True)
         except ValueError as exc: self.json({"error": str(exc)}, 400); return
         self.messenger.add_message(message)
-        # L'historique local conserve le nom de fichier de l'image ; les pairs,
-        # eux, doivent recevoir les octets d'origine afin de la stocker chez eux.
+        # L'historique local conserve le nom de fichier ; les pairs recoivent les
+        # octets d'origine afin de stocker leur propre copie.
         peer_message = {"id": message["id"], "sender": message["sender"],
                         "text": message["text"], "created_at": message["created_at"],
-                        "image": outbound.get("image")}
+                        "attachment": outbound.get("attachment"),
+                        # Les anciennes versions comprennent encore le champ
+                        # image : on le conserve pour une image, sans l'utiliser
+                        # pour les documents generiques.
+                        "image": outbound.get("image") or (
+                            outbound.get("attachment") if str((outbound.get("attachment") or {}).get("type", "")).startswith("image/") else None)}
         delivered, failed = self.messenger.send_to_peers(peer_message)
         self.json({"ok": True, "delivered": delivered, "failed": failed})
 
 
 def build_message(payload, incoming=False, sender=None, mine=False):
     text = str(payload.get("text") or "").strip()[:4000]
-    image = payload.get("image")
-    image_name = None
-    if image:
-        if not isinstance(image, dict) or image.get("type") not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
-            raise ValueError("Format d'image non accepte")
-        try: raw = base64.b64decode(image.get("data", ""), validate=True)
-        except Exception: raise ValueError("Image invalide")
-        if not raw or len(raw) > MAX_IMAGE_BYTES: raise ValueError("Image trop lourde (maximum 6 Mo)")
-        ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}[image["type"]]
-        image_name = f"{uuid.uuid4().hex}{ext}"; (MEDIA_DIR / image_name).write_bytes(raw)
-    if not text and not image_name: raise ValueError("Message vide")
+    incoming_file = payload.get("attachment") or payload.get("image")
+    attachment = None
+    if incoming_file:
+        if not isinstance(incoming_file, dict): raise ValueError("Fichier invalide")
+        name = Path(str(incoming_file.get("name") or "fichier")).name[:160] or "fichier"
+        content_type = str(incoming_file.get("type") or "application/octet-stream")[:128]
+        try: raw = base64.b64decode(incoming_file.get("data", ""), validate=True)
+        except Exception: raise ValueError("Fichier invalide")
+        if not raw or len(raw) > MAX_FILE_BYTES: raise ValueError("Fichier trop lourd (maximum 20 Mo)")
+        suffix = Path(name).suffix[:12]
+        stored_name = f"{uuid.uuid4().hex}{suffix}"; (MEDIA_DIR / stored_name).write_bytes(raw)
+        attachment = {"stored_name": stored_name, "name": name, "type": content_type}
+    if not text and not attachment: raise ValueError("Message vide")
     return {"id": str(payload.get("id") or uuid.uuid4()), "sender": str(payload.get("sender") or sender or "PC inconnu")[:48],
-            "text": text, "image": image_name, "created_at": payload.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), "mine": mine}
+            "text": text, "attachment": attachment, "image": attachment["stored_name"] if attachment and attachment["type"].startswith("image/") else None,
+            "created_at": payload.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), "mine": mine}
 
 
 def main():
