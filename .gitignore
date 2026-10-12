@@ -1,0 +1,11 @@
+# Donnees de chat propres a chaque PC (messages et images recus)
+lan_messenger_data/
+
+# Artefacts Python locaux
+__pycache__/
+*.py[cod]
+
+# Dossiers temporaires de compilation
+build/
+dist/
+.build-*/
