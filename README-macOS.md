@@ -118,3 +118,12 @@ l’ancienne version Mac n’a pas encore de bouton MAJ. Pour publier une future
 version, augmentez `APP_VERSION`, `macos/VERSION.json` et la version du fichier
 spec, recompilez puis poussez le ZIP avec ces fichiers. La version Windows et
 son programme de mise à jour restent indépendants.
+
+## Version macOS 1.1.1 : coller dans le message
+
+Cliquez dans la zone de saisie puis utilisez **⌘V** ou **Édition > Coller** dans
+la barre de menus macOS. Le menu natif d’édition est maintenant activé (copier,
+couper, coller, sélectionner tout). Le texte conserve le comportement WebKit.
+Une image copiée, notamment une capture d’écran, est préparée comme pièce jointe ;
+cliquez ensuite sur Envoyer à tous. PNG/JPEG/WebP/GIF, maximum 6 Mo, comme les
+images déposées. Le collage n’envoie aucun message automatiquement.
