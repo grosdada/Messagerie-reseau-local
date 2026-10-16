@@ -18,7 +18,7 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, quote
 from urllib.request import Request, urlopen
 
 # Dans l'executable, les donnees doivent rester a cote du .exe et non dans le
@@ -27,13 +27,15 @@ ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) el
 DATA_DIR = (Path.home() / "Library" / "Application Support" / "MessagerieLocale") if sys.platform == "darwin" else ROOT / "lan_messenger_data"
 MEDIA_DIR = DATA_DIR / "media"
 HISTORY_FILE = DATA_DIR / "history.json"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 MAC_VERSION_URL = "https://raw.githubusercontent.com/grosdada/Messagerie-reseau-local/main/macos/VERSION.json"
 MAC_DOWNLOAD_URL = "https://github.com/grosdada/Messagerie-reseau-local/raw/refs/heads/main/releases/MessagerieLocale-macOS-arm64.zip"
 HTTP_PORT = 8766
 DISCOVERY_PORT = 37020
 NETWORK = ipaddress.ip_network("192.168.1.0/24")
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
+MAX_FILE_BYTES = 20 * 1024 * 1024
+MAX_REQUEST_BYTES = 30 * 1024 * 1024
 
 
 def is_allowed(address):
@@ -176,10 +178,10 @@ def check_update():
 
 PAGE = r'''<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Messagerie locale</title><style>
-:root{color-scheme:dark;--bg:#11151c;--panel:#1d2430;--line:#364153;--text:#edf2f7;--muted:#9eabbc;--accent:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#10151c,#172235);color:var(--text);font:15px system-ui,sans-serif}.app{max-width:900px;height:100vh;margin:auto;padding:20px;display:grid;grid-template-rows:auto 1fr auto;gap:14px}header,.composer{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}#update{height:34px;background:transparent;color:var(--accent);border:1px solid var(--accent)}.message{position:relative}.copy-message{position:absolute;top:8px;right:8px;padding:2px 5px;background:transparent;color:var(--muted);font-size:16px}.meta{padding-right:24px}h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px}.online{color:var(--accent)}#messages{overflow:auto;padding:8px 2px;display:flex;flex-direction:column;gap:10px}.message{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;max-width:82%}.mine{align-self:flex-end;border-color:#438b73}.meta{font-size:12px;color:var(--muted);margin-bottom:5px}.message p{white-space:pre-wrap;margin:0}.message img{display:block;max-width:100%;max-height:340px;margin-top:9px;border-radius:8px}.composer{display:grid;grid-template-columns:1fr auto;gap:10px}textarea{min-height:62px;resize:vertical;background:#121923;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}textarea.dragover{border-color:var(--accent);box-shadow:0 0 0 3px #6ee7b733}button{background:var(--accent);color:#09251c;border:0;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer}#image{grid-column:1/2;color:var(--muted)}#notice{font-size:12px;color:var(--muted);grid-column:1/-1}.empty{color:var(--muted);text-align:center;margin-top:40px}@media(max-width:600px){.app{padding:10px}.message{max-width:94%}.composer{grid-template-columns:1fr}.composer button{height:42px}#image{grid-column:auto}}
+:root{color-scheme:dark;--bg:#11151c;--panel:#1d2430;--line:#364153;--text:#edf2f7;--muted:#9eabbc;--accent:#6ee7b7}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#10151c,#172235);color:var(--text);font:15px system-ui,sans-serif}.app{max-width:900px;height:100vh;margin:auto;padding:20px;display:grid;grid-template-rows:auto 1fr auto;gap:14px}header,.composer{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}#update{height:34px;background:transparent;color:var(--accent);border:1px solid var(--accent)}.message{position:relative}.copy-message{position:absolute;top:8px;right:8px;padding:2px 5px;background:transparent;color:var(--muted);font-size:16px}.meta{padding-right:24px}h1{font-size:20px;margin:0 0 5px}.sub{color:var(--muted);font-size:13px}.online{color:var(--accent)}#messages{overflow:auto;padding:8px 2px;display:flex;flex-direction:column;gap:10px}.message{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;max-width:82%}.mine{align-self:flex-end;border-color:#438b73}.meta{font-size:12px;color:var(--muted);margin-bottom:5px}.message p{white-space:pre-wrap;margin:0}.message img{display:block;max-width:100%;max-height:340px;margin-top:9px;border-radius:8px}.attachment{display:block;margin-top:8px;color:var(--accent);overflow-wrap:anywhere}.composer{display:grid;grid-template-columns:1fr auto;gap:10px}textarea{min-height:62px;resize:vertical;background:#121923;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit}textarea.dragover{border-color:var(--accent);box-shadow:0 0 0 3px #6ee7b733}button{background:var(--accent);color:#09251c;border:0;border-radius:10px;padding:0 18px;font-weight:700;cursor:pointer}#image{grid-column:1/2;color:var(--muted)}#notice{font-size:12px;color:var(--muted);grid-column:1/-1}.empty{color:var(--muted);text-align:center;margin-top:40px}@media(max-width:600px){.app{padding:10px}.message{max-width:94%}.composer{grid-template-columns:1fr}.composer button{height:42px}#image{grid-column:auto}}
 </style><body><main class="app"><header><div><h1>Messagerie locale</h1><div class="sub"><span id="identity"></span> · <span class="online" id="peers">Recherche des PC…</span></div></div><button type="button" id="update" title="Vérifier les mises à jour macOS">MAJ</button></header><section id="messages"></section><form class="composer" id="form"><textarea id="text" maxlength="4000" placeholder="Écrire à tous les PC connectés…"></textarea><button>Envoyer à tous</button><input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif"><div id="notice">Les messages et images restent sur le réseau local. Images limitées à 6 Mo.</div></form></main><script>
 const messages=document.querySelector('#messages'),notice=document.querySelector('#notice');let first=true;
-function esc(v){const n=document.createElement('span');n.textContent=v;return n.innerHTML}function render(items){messages.innerHTML=items.length?'': '<div class="empty">Aucun message pour le moment.</div>';for(const m of items){const el=document.createElement('article');el.className='message '+(m.mine?'mine':'');el.innerHTML=`<button type="button" class="copy-message" title="Copier le message" aria-label="Copier le message">⧉</button><div class="meta">${esc(m.sender)} · ${new Date(m.created_at).toLocaleString()}</div>${m.text?`<p>${esc(m.text)}</p>`:''}${m.image?`<img alt="Image partagée" src="/media/${encodeURIComponent(m.image)}">`:''}`;el.querySelector('.copy-message').addEventListener('click',e=>copyMessage(m.text||(m.image?'Image partagée':''),e.currentTarget));messages.append(el)}if(first||messages.scrollHeight-messages.scrollTop-messages.clientHeight<100)messages.scrollTop=messages.scrollHeight;first=false}
+function esc(v){const n=document.createElement('span');n.textContent=v;return n.innerHTML}function render(items){messages.innerHTML=items.length?'': '<div class="empty">Aucun message pour le moment.</div>';for(const m of items){const el=document.createElement('article');el.className='message '+(m.mine?'mine':'');el.innerHTML=`<button type="button" class="copy-message" title="Copier le message" aria-label="Copier le message">⧉</button><div class="meta">${esc(m.sender)} · ${new Date(m.created_at).toLocaleString()}</div>${m.text?`<p>${esc(m.text)}</p>`:''}${m.image?`<img alt="Image partagée" src="/media/${encodeURIComponent(m.image)}">`:''}${m.attachment?`<a class="attachment" download="${esc(m.attachment.name)}" href="/media/${encodeURIComponent(m.attachment.stored_name)}">📎 ${esc(m.attachment.name)} — Télécharger</a>`:''}`;el.querySelector('.copy-message').addEventListener('click',e=>copyMessage(m.text||(m.image?'Image partagée':''),e.currentTarget));messages.append(el)}if(first||messages.scrollHeight-messages.scrollTop-messages.clientHeight<100)messages.scrollTop=messages.scrollHeight;first=false}
 async function copyMessage(value,button){try{try{await navigator.clipboard.writeText(value)}catch{const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();try{if(!document.execCommand('copy'))throw Error('Copie impossible')}finally{area.remove()}}button.textContent='✓';setTimeout(()=>button.textContent='⧉',900)}catch(e){notice.textContent='Copie impossible : sélectionne le texte puis utilise ⌘C.'}}
 document.querySelector('#update').addEventListener('click',async e=>{const button=e.currentTarget;button.disabled=true;notice.textContent='Vérification de la version macOS sur GitHub…';try{const r=await fetch('/api/update-check'),d=await r.json();if(!r.ok)throw Error(d.error);if(!d.available){notice.textContent=`Version macOS ${d.current} à jour.`;return}if(!confirm(`Version macOS ${d.version} disponible. Télécharger le ZIP ? Il faudra quitter l’app puis remplacer la copie dans Applications.`))return;const result=await fetch('/api/update-download',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),data=await result.json();if(!result.ok)throw Error(data.error);notice.textContent='Téléchargement ouvert dans le navigateur. Décompresse le ZIP, quitte la messagerie et remplace l’app dans Applications. Ton historique est conservé.'}catch(e){notice.textContent=e.message}finally{button.disabled=false}});
 async function refresh(){try{const r=await fetch('/api/state'),d=await r.json();document.querySelector('#identity').textContent=d.name;document.querySelector('#peers').textContent=d.peers.length?`${d.peers.length} PC connecté${d.peers.length>1?'s':''} : ${d.peers.map(p=>p.name).join(', ')}`:'Aucun autre PC détecté';render(d.history)}catch(e){notice.textContent='Connexion au service local impossible.'}}
@@ -204,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def read_body(self):
         length = int(self.headers.get("Content-Length", "0"))
-        if length <= 0 or length > MAX_IMAGE_BYTES * 2:
+        if length <= 0 or length > MAX_REQUEST_BYTES:
             raise ValueError("Taille de requête invalide")
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
@@ -217,7 +219,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(403, "Source refusee"); return
             name = Path(unquote(path[7:])).name; file = MEDIA_DIR / name
             if not file.is_file(): self.send_error(404); return
-            body = file.read_bytes(); self.send_response(200); self.send_header("Content-Type", mimetypes.guess_type(file)[0] or "application/octet-stream")
+            body = file.read_bytes(); self.send_response(200); self.send_header("Content-Type", mimetypes.guess_type(file)[0] if file.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else "application/octet-stream")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            if file.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                original = next((m["attachment"]["name"] for m in self.messenger.history if m.get("attachment") and m["attachment"].get("stored_name") == name), name)
+                self.send_header("Content-Disposition", "attachment; filename*=UTF-8''" + quote(original, safe=""))
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body); return
         if not self.local_only():
             self.send_error(403, "Interface reservee au poste local"); return
@@ -264,19 +270,22 @@ class Handler(BaseHTTPRequestHandler):
 
 def build_message(payload, incoming=False, sender=None, mine=False):
     text = str(payload.get("text") or "").strip()[:4000]
-    image = payload.get("image")
-    image_name = None
-    if image:
-        if not isinstance(image, dict) or image.get("type") not in {"image/png", "image/jpeg", "image/webp", "image/gif"}:
-            raise ValueError("Format d'image non accepte")
-        try: raw = base64.b64decode(image.get("data", ""), validate=True)
-        except Exception: raise ValueError("Image invalide")
-        if not raw or len(raw) > MAX_IMAGE_BYTES: raise ValueError("Image trop lourde (maximum 6 Mo)")
-        ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "image/gif": ".gif"}[image["type"]]
-        image_name = f"{uuid.uuid4().hex}{ext}"; (MEDIA_DIR / image_name).write_bytes(raw)
-    if not text and not image_name: raise ValueError("Message vide")
+    incoming_file = payload.get("attachment") or payload.get("image")
+    attachment = None
+    if incoming_file:
+        if not isinstance(incoming_file, dict): raise ValueError("Fichier invalide")
+        name = Path(str(incoming_file.get("name") or "fichier")).name[:160] or "fichier"
+        content_type = str(incoming_file.get("type") or "application/octet-stream")[:128]
+        try: raw = base64.b64decode(incoming_file.get("data", ""), validate=True)
+        except Exception: raise ValueError("Fichier invalide")
+        if not raw or len(raw) > MAX_FILE_BYTES: raise ValueError("Fichier trop lourd (maximum 20 Mo)")
+        suffix = Path(name).suffix[:12]
+        stored_name = f"{uuid.uuid4().hex}{suffix}"; (MEDIA_DIR / stored_name).write_bytes(raw)
+        attachment = {"stored_name": stored_name, "name": name, "type": content_type}
+    if not text and not attachment: raise ValueError("Message vide")
     return {"id": str(payload.get("id") or uuid.uuid4()), "sender": str(payload.get("sender") or sender or "PC inconnu")[:48],
-            "text": text, "image": image_name, "created_at": payload.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), "mine": mine}
+            "text": text, "attachment": attachment, "image": attachment["stored_name"] if attachment and attachment["type"].startswith("image/") else None,
+            "created_at": payload.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%S"), "mine": mine}
 
 
 def main():
@@ -301,6 +310,7 @@ def main():
         import webview
         # Cocoa Edit menu routes standard shortcuts through the responder chain.
         webview.settings["SHOW_DEFAULT_MENUS"] = True
+        webview.settings["ALLOW_DOWNLOADS"] = True
         threading.Thread(target=server.serve_forever, daemon=True).start()
         try:
             webview.create_window("Messagerie locale", f"http://127.0.0.1:{args.port}",

@@ -127,3 +127,16 @@ couper, coller, sélectionner tout). Le texte conserve le comportement WebKit.
 Une image copiée, notamment une capture d’écran, est préparée comme pièce jointe ;
 cliquez ensuite sur Envoyer à tous. PNG/JPEG/WebP/GIF, maximum 6 Mo, comme les
 images déposées. Le collage n’envoie aucun message automatiquement.
+
+## Version macOS 1.1.2 : réception des pièces jointes Windows
+
+Les ZIP et autres documents reçus via le champ Windows `attachment` sont stockés
+localement et affichés avec leur nom et un lien **Télécharger**, jusqu’à 20 Mo.
+Le clic ouvre le dialogue macOS d’enregistrement ; les archives ne sont ni
+ouvertes ni extraites automatiquement. Les images et anciens historiques restent
+compatibles. L’envoi depuis le Mac reste limité aux images (6 Mo).
+Les pièces jointes qui ont été refusées par l’ancienne version doivent être
+renvoyées depuis le PC après la mise à jour.
+
+Validation : réception HTTP d’un vrai ZIP de 7 Mo au format Windows, téléchargement
+et comparaison exacte des octets, vérification du nom et rechargement de l’historique.
