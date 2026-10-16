@@ -7,7 +7,7 @@ pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='MessagerieLocale', console=False)
 coll = COLLECT(exe, a.binaries, a.datas, name='MessagerieLocale')
 app = BUNDLE(coll, name='Messagerie locale.app', bundle_identifier='fr.grosdada.messagerielocale', info_plist={
-    'CFBundleShortVersionString': '1.0.0',
+    'CFBundleShortVersionString': '1.1.0',
     'NSLocalNetworkUsageDescription': 'Découvrir les PC du réseau local et échanger des messages et des images sans Internet.',
     'NSHighResolutionCapable': True,
 })

@@ -97,3 +97,24 @@ remplacent pas une validation physique Mac/PC (pare-feu, Wi-Fi, broadcast).
 - Quatre postes réels découverts par UDP ; leurs `/api/receive` rejettent correctement un message vide avec HTTP 400, sans historique ajouté.
 - Tests HTTP texte Unicode et images dans les deux sens avec la source Windows originale : 4 tests réussis (Windows initial et Windows 1.2.4).
 - Contrôle visuel WebKit et dépôt de fichier manuel non effectués : autorisation de contrôle de l’interface indisponible. À vérifier sur le Mac avec la procédure ci-dessus.
+
+## Version macOS 1.1.0 : MAJ et copie
+
+L’icône ⧉ de chaque message copie son texte dans le presse-papiers. Une coche
+confirme la copie. Pour un message contenant seulement une image, elle copie
+le libellé « Image partagée », pas les pixels.
+
+Le bouton **MAJ** vérifie la version macOS publiée dans `macos/VERSION.json`.
+Cette vérification contacte GitHub uniquement au clic : aucune vérification
+périodique ni connexion Internet pour le chat. Si une version plus récente est
+disponible, une confirmation ouvre le téléchargement du ZIP Apple Silicon dans
+le navigateur. Décompressez-le, quittez la messagerie puis remplacez l’app dans
+Applications et relancez-la. L’historique reste dans Application Support.
+Le remplacement est manuel ; aucun mot de passe administrateur n’est demandé par
+l’app. Les autorisations Gatekeeper/pare-feu peuvent être à renouveler.
+
+Pour recevoir ces boutons la première fois, installez le nouveau ZIP du dépôt :
+l’ancienne version Mac n’a pas encore de bouton MAJ. Pour publier une future
+version, augmentez `APP_VERSION`, `macos/VERSION.json` et la version du fichier
+spec, recompilez puis poussez le ZIP avec ces fichiers. La version Windows et
+son programme de mise à jour restent indépendants.
